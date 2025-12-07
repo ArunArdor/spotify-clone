@@ -6,7 +6,7 @@ import Header from "./components/Header";
 import SongList from "./components/SongList";
 import Player from "./components/Player";
 
-// Song data (update src names if your files differ)
+// Song data (local fallback)
 const SONGS = [
   {
     id: 1,
@@ -47,7 +47,7 @@ function formatTime(seconds) {
 }
 
 function App() {
-  const [songs, setSongs] = useState(SONGS); // now main source of truth
+  const [songs, setSongs] = useState(SONGS); // backend/local songs
   const [currentSong, setCurrentSong] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0); // seconds
@@ -55,16 +55,22 @@ function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activePage, setActivePage] = useState("home"); // "home" | "search" | "library"
 
+  // form state for adding custom songs (backend)
   const [newSong, setNewSong] = useState({
-  title: "",
-  artist: "",
-  duration: "",
-  src: "",
-});
+    title: "",
+    artist: "",
+    duration: "",
+    src: "",
+  });
+
+  // state for ONLINE search (internet)
+  const [onlineResults, setOnlineResults] = useState([]);
+  const [isOnlineLoading, setIsOnlineLoading] = useState(false);
+  const [onlineError, setOnlineError] = useState("");
 
   const audioRef = useRef(null);
 
-  // 🔥 Fetch from backend using Fetch API
+  // 🔥 Load songs from your Node backend (GET /api/songs)
   useEffect(() => {
     const loadSongs = async () => {
       try {
@@ -81,7 +87,7 @@ function App() {
     loadSongs();
   }, []);
 
-  // Filter songs based on search
+  // Local filtering (used on Home page)
   const normalizedQuery = searchQuery.toLowerCase().trim();
   const filteredSongs =
     normalizedQuery === ""
@@ -92,7 +98,7 @@ function App() {
             song.artist.toLowerCase().includes(normalizedQuery)
         );
 
-  // Click on song from list
+  // Click on song from any list (local or online)
   const handleSongClick = (song) => {
     if (currentSong?.id === song.id) {
       if (audioRef.current) {
@@ -109,7 +115,10 @@ function App() {
   // Play / Pause button in player
   const handlePlayPauseClick = () => {
     if (!currentSong) {
-      const firstSong = filteredSongs[0] || songs[0];
+      const firstSong =
+        activePage === "search"
+          ? onlineResults[0] || songs[0]
+          : filteredSongs[0] || songs[0];
       if (!firstSong) return;
       setCurrentSong(firstSong);
       setIsPlaying(true);
@@ -120,7 +129,12 @@ function App() {
 
   // ▶▶ Next song
   const playNext = () => {
-    const list = filteredSongs.length > 0 ? filteredSongs : songs;
+    const list =
+      activePage === "search" && onlineResults.length > 0
+        ? onlineResults
+        : filteredSongs.length > 0
+        ? filteredSongs
+        : songs;
 
     if (!currentSong) {
       if (list.length === 0) return;
@@ -138,7 +152,12 @@ function App() {
 
   // ◀◀ Previous song
   const playPrev = () => {
-    const list = filteredSongs.length > 0 ? filteredSongs : songs;
+    const list =
+      activePage === "search" && onlineResults.length > 0
+        ? onlineResults
+        : filteredSongs.length > 0
+        ? filteredSongs
+        : songs;
 
     if (!currentSong) {
       if (list.length === 0) return;
@@ -209,46 +228,79 @@ function App() {
     setCurrentTime(newTime);
   };
 
+  // ✅ Add-song handler (uses your backend POST /api/songs)
   const handleAddSong = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  if (!newSong.title || !newSong.artist || !newSong.duration || !newSong.src) {
-    alert("Please fill all fields");
-    return;
-  }
+    if (!newSong.title || !newSong.artist || !newSong.duration || !newSong.src) {
+      alert("Please fill all fields");
+      return;
+    }
 
-  try {
-    const res = await fetch("http://localhost:5000/api/songs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newSong),
-    });
+    try {
+      const res = await fetch("http://localhost:5000/api/songs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newSong),
+      });
 
-  const text = await res.text();
-  console.log("POST /api/songs status:", res.status, text);
+      if (!res.ok) {
+        throw new Error("Failed to add song");
+      }
 
-    if (!res.ok) {
-    throw new Error(`Failed to add song: ${res.status} ${text}`);
-  }
-    const created = JSON.parse(text);
+      const created = await res.json();
+      setSongs((prev) => [...prev, created]);
 
-    // Update UI with the new song
-    setSongs((prev) => [...prev, created]);
+      setNewSong({
+        title: "",
+        artist: "",
+        duration: "",
+        src: "",
+      });
 
-    // Clear the form
-    setNewSong({
-      title: "",
-      artist: "",
-      duration: "",
-      src: "",
-    });
+      alert("Song added!");
+    } catch (err) {
+      console.error(err);
+      alert("Error adding song (is backend running?)");
+    }
+  };
 
-    alert("Song added!");
-  } catch (err) {
-    console.error(err);
-    alert("Error adding song (is backend running?)");
-  }
-};
+  // 🌍 ONLINE SEARCH using iTunes API
+  const handleOnlineSearch = async (e) => {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) return;
+
+    setIsOnlineLoading(true);
+    setOnlineError("");
+    try {
+      const res = await fetch(
+        `https://itunes.apple.com/search?term=${encodeURIComponent(
+          q
+        )}&media=music&limit=25`
+      );
+      const data = await res.json();
+
+      const mapped = (data.results || [])
+        .filter((item) => item.previewUrl)
+        .map((item, idx) => ({
+          id: item.trackId || idx,
+          title: item.trackName,
+          artist: item.artistName,
+          duration: item.trackTimeMillis
+            ? formatTime(item.trackTimeMillis / 1000)
+            : "0:30",
+          src: item.previewUrl, // internet audio URL
+        }));
+
+      setOnlineResults(mapped);
+    } catch (err) {
+      console.error("Online search failed", err);
+      setOnlineError("Search failed. Please try again.");
+    } finally {
+      setIsOnlineLoading(false);
+    }
+  };
 
   const progressPercent =
     duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
@@ -292,82 +344,122 @@ function App() {
           )}
 
           {activePage === "search" && (
-            <>
-              <section className="main-section">
-                <h2>Search</h2>
-                <p className="section-subtitle">
-                  Search inside your songs by title or artist.
-                </p>
-              </section>
+            <section className="main-section">
+              <h2>Search the internet</h2>
+              <p className="section-subtitle">
+                Type a song or artist. Results use public iTunes previews.
+              </p>
 
-              <SongList
-                songs={filteredSongs}
-                currentSong={currentSong}
-                onSongClick={handleSongClick}
-                searchQuery={searchQuery}
-                onSearchChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </>
+              <form className="add-song-form" onSubmit={handleOnlineSearch}>
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Search all music (online)"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <button className="pill-btn" type="submit">
+                  {isOnlineLoading ? "Searching..." : "Search"}
+                </button>
+              </form>
+
+              {onlineError && (
+                <p className="section-subtitle" style={{ color: "#ff7676" }}>
+                  {onlineError}
+                </p>
+              )}
+
+              <div className="song-list">
+                {isOnlineLoading && (
+                  <div className="song-empty">Loading results…</div>
+                )}
+
+                {!isOnlineLoading && onlineResults.length === 0 && (
+                  <div className="song-empty">
+                    No results yet. Try searching for &quot;AP Dhillon&quot; or
+                    &quot;Sidhu Moose Wala&quot;.
+                  </div>
+                )}
+
+                {!isOnlineLoading &&
+                  onlineResults.map((song, index) => (
+                    <div
+                      key={song.id}
+                      className={`song-row ${
+                        currentSong?.id === song.id ? "active" : ""
+                      }`}
+                      onClick={() => handleSongClick(song)}
+                    >
+                      <span>{index + 1}</span>
+                      <span>{song.title}</span>
+                      <span>{song.artist}</span>
+                      <span>{song.duration}</span>
+                    </div>
+                  ))}
+              </div>
+            </section>
           )}
 
           {activePage === "library" && (
-  <section className="main-section">
-    <h2>Your Library</h2>
-    <p className="section-subtitle">
-      Add custom songs to your library (stored in backend memory).
-    </p>
+            <section className="main-section">
+              <h2>Your Library</h2>
+              <p className="section-subtitle">
+                Add custom songs to your library (stored in backend memory).
+              </p>
 
-    <form className="add-song-form" onSubmit={handleAddSong}>
-      <input
-        type="text"
-        placeholder="Title"
-        value={newSong.title}
-        onChange={(e) =>
-          setNewSong((prev) => ({ ...prev, title: e.target.value }))
-        }
-      />
-      <input
-        type="text"
-        placeholder="Artist"
-        value={newSong.artist}
-        onChange={(e) =>
-          setNewSong((prev) => ({ ...prev, artist: e.target.value }))
-        }
-      />
-      <input
-        type="text"
-        placeholder="Duration (e.g. 3:21)"
-        value={newSong.duration}
-        onChange={(e) =>
-          setNewSong((prev) => ({ ...prev, duration: e.target.value }))
-        }
-      />
-      <input
-        type="text"
-        placeholder="File path (e.g. /audio/excuses.mp3)"
-        value={newSong.src}
-        onChange={(e) =>
-          setNewSong((prev) => ({ ...prev, src: e.target.value }))
-        }
-      />
-      <button type="submit" className="pill-btn">
-        Add Song
-      </button>
-    </form>
+              <form className="add-song-form" onSubmit={handleAddSong}>
+                <input
+                  type="text"
+                  placeholder="Title"
+                  value={newSong.title}
+                  onChange={(e) =>
+                    setNewSong((prev) => ({ ...prev, title: e.target.value }))
+                  }
+                />
+                <input
+                  type="text"
+                  placeholder="Artist"
+                  value={newSong.artist}
+                  onChange={(e) =>
+                    setNewSong((prev) => ({ ...prev, artist: e.target.value }))
+                  }
+                />
+                <input
+                  type="text"
+                  placeholder="Duration (e.g. 3:21)"
+                  value={newSong.duration}
+                  onChange={(e) =>
+                    setNewSong((prev) => ({
+                      ...prev,
+                      duration: e.target.value,
+                    }))
+                  }
+                />
+                <input
+                  type="text"
+                  placeholder="File path (e.g. /audio/excuses.mp3)"
+                  value={newSong.src}
+                  onChange={(e) =>
+                    setNewSong((prev) => ({ ...prev, src: e.target.value }))
+                  }
+                />
+                <button type="submit" className="pill-btn">
+                  Add Song
+                </button>
+              </form>
 
-    <div style={{ marginTop: "1rem" }}>
-      <h3>All Songs (from backend)</h3>
-      <ul>
-        {songs.map((song) => (
-          <li key={song.id}>
-            {song.title} — {song.artist}
-          </li>
-        ))}
-      </ul>
-    </div>
-  </section>
-)}
-
+              <div style={{ marginTop: "1rem" }}>
+                <h3>All Songs (from backend)</h3>
+                <ul>
+                  {songs.map((song) => (
+                    <li key={song.id}>
+                      {song.title} — {song.artist}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          )}
         </main>
       </div>
 
