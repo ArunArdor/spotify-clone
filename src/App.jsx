@@ -47,21 +47,46 @@ function formatTime(seconds) {
 }
 
 function App() {
+  const [songs, setSongs] = useState(SONGS); // now main source of truth
   const [currentSong, setCurrentSong] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0); // seconds
   const [duration, setDuration] = useState(0); // seconds
   const [searchQuery, setSearchQuery] = useState("");
-
   const [activePage, setActivePage] = useState("home"); // "home" | "search" | "library"
+
+  const [newSong, setNewSong] = useState({
+  title: "",
+  artist: "",
+  duration: "",
+  src: "",
+});
+
   const audioRef = useRef(null);
+
+  // 🔥 Fetch from backend using Fetch API
+  useEffect(() => {
+    const loadSongs = async () => {
+      try {
+        const res = await fetch("http://localhost:5000/api/songs");
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setSongs(data);
+        }
+      } catch (err) {
+        console.log("Backend not running, using local SONGS.", err);
+      }
+    };
+
+    loadSongs();
+  }, []);
 
   // Filter songs based on search
   const normalizedQuery = searchQuery.toLowerCase().trim();
   const filteredSongs =
     normalizedQuery === ""
-      ? SONGS
-      : SONGS.filter(
+      ? songs
+      : songs.filter(
           (song) =>
             song.title.toLowerCase().includes(normalizedQuery) ||
             song.artist.toLowerCase().includes(normalizedQuery)
@@ -84,7 +109,7 @@ function App() {
   // Play / Pause button in player
   const handlePlayPauseClick = () => {
     if (!currentSong) {
-      const firstSong = filteredSongs[0] || SONGS[0];
+      const firstSong = filteredSongs[0] || songs[0];
       if (!firstSong) return;
       setCurrentSong(firstSong);
       setIsPlaying(true);
@@ -95,7 +120,7 @@ function App() {
 
   // ▶▶ Next song
   const playNext = () => {
-    const list = filteredSongs.length > 0 ? filteredSongs : SONGS;
+    const list = filteredSongs.length > 0 ? filteredSongs : songs;
 
     if (!currentSong) {
       if (list.length === 0) return;
@@ -113,7 +138,7 @@ function App() {
 
   // ◀◀ Previous song
   const playPrev = () => {
-    const list = filteredSongs.length > 0 ? filteredSongs : SONGS;
+    const list = filteredSongs.length > 0 ? filteredSongs : songs;
 
     if (!currentSong) {
       if (list.length === 0) return;
@@ -184,101 +209,188 @@ function App() {
     setCurrentTime(newTime);
   };
 
+  const handleAddSong = async (e) => {
+  e.preventDefault();
+
+  if (!newSong.title || !newSong.artist || !newSong.duration || !newSong.src) {
+    alert("Please fill all fields");
+    return;
+  }
+
+  try {
+    const res = await fetch("http://localhost:5000/api/songs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newSong),
+    });
+
+  const text = await res.text();
+  console.log("POST /api/songs status:", res.status, text);
+
+    if (!res.ok) {
+    throw new Error(`Failed to add song: ${res.status} ${text}`);
+  }
+    const created = JSON.parse(text);
+
+    // Update UI with the new song
+    setSongs((prev) => [...prev, created]);
+
+    // Clear the form
+    setNewSong({
+      title: "",
+      artist: "",
+      duration: "",
+      src: "",
+    });
+
+    alert("Song added!");
+  } catch (err) {
+    console.error(err);
+    alert("Error adding song (is backend running?)");
+  }
+};
+
   const progressPercent =
     duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
 
-return (
-  <div className="app">
-    <div className="app-body">
-      <Sidebar
-        activePage={activePage}
-        onChangePage={setActivePage}
+  return (
+    <div className="app">
+      <div className="app-body">
+        <Sidebar activePage={activePage} onChangePage={setActivePage} />
+
+        <main className="main-content">
+          <Header />
+
+          {activePage === "home" && (
+            <>
+              <section className="main-section">
+                <h2>Good evening</h2>
+                <div className="card-row">
+                  <div className="playlist-card">Liked Songs</div>
+                  <div className="playlist-card">Daily Mix 1</div>
+                  <div className="playlist-card">Punjabi Hits</div>
+                </div>
+              </section>
+
+              <section className="main-section">
+                <h2>Made for You</h2>
+                <div className="card-row">
+                  <div className="big-card">Discover Weekly</div>
+                  <div className="big-card">Release Radar</div>
+                  <div className="big-card">Chill Mix</div>
+                </div>
+              </section>
+
+              <SongList
+                songs={filteredSongs}
+                currentSong={currentSong}
+                onSongClick={handleSongClick}
+                searchQuery={searchQuery}
+                onSearchChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </>
+          )}
+
+          {activePage === "search" && (
+            <>
+              <section className="main-section">
+                <h2>Search</h2>
+                <p className="section-subtitle">
+                  Search inside your songs by title or artist.
+                </p>
+              </section>
+
+              <SongList
+                songs={filteredSongs}
+                currentSong={currentSong}
+                onSongClick={handleSongClick}
+                searchQuery={searchQuery}
+                onSearchChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </>
+          )}
+
+          {activePage === "library" && (
+  <section className="main-section">
+    <h2>Your Library</h2>
+    <p className="section-subtitle">
+      Add custom songs to your library (stored in backend memory).
+    </p>
+
+    <form className="add-song-form" onSubmit={handleAddSong}>
+      <input
+        type="text"
+        placeholder="Title"
+        value={newSong.title}
+        onChange={(e) =>
+          setNewSong((prev) => ({ ...prev, title: e.target.value }))
+        }
+      />
+      <input
+        type="text"
+        placeholder="Artist"
+        value={newSong.artist}
+        onChange={(e) =>
+          setNewSong((prev) => ({ ...prev, artist: e.target.value }))
+        }
+      />
+      <input
+        type="text"
+        placeholder="Duration (e.g. 3:21)"
+        value={newSong.duration}
+        onChange={(e) =>
+          setNewSong((prev) => ({ ...prev, duration: e.target.value }))
+        }
+      />
+      <input
+        type="text"
+        placeholder="File path (e.g. /audio/excuses.mp3)"
+        value={newSong.src}
+        onChange={(e) =>
+          setNewSong((prev) => ({ ...prev, src: e.target.value }))
+        }
+      />
+      <button type="submit" className="pill-btn">
+        Add Song
+      </button>
+    </form>
+
+    <div style={{ marginTop: "1rem" }}>
+      <h3>All Songs (from backend)</h3>
+      <ul>
+        {songs.map((song) => (
+          <li key={song.id}>
+            {song.title} — {song.artist}
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+)}
+
+        </main>
+      </div>
+
+      <Player
+        currentSong={currentSong}
+        isPlaying={isPlaying}
+        onPlayPause={handlePlayPauseClick}
+        onNext={playNext}
+        onPrev={playPrev}
+        currentTime={formatTime(currentTime)}
+        duration={formatTime(duration)}
+        progressPercent={progressPercent}
+        onTimelineClick={handleTimelineClick}
       />
 
-      <main className="main-content">
-        <Header />
-
-        {activePage === "home" && (
-          <>
-            <section className="main-section">
-              <h2>Good evening</h2>
-              <div className="card-row">
-                <div className="playlist-card">Liked Songs</div>
-                <div className="playlist-card">Daily Mix 1</div>
-                <div className="playlist-card">Punjabi Hits</div>
-              </div>
-            </section>
-
-            <section className="main-section">
-              <h2>Made for You</h2>
-              <div className="card-row">
-                <div className="big-card">Discover Weekly</div>
-                <div className="big-card">Release Radar</div>
-                <div className="big-card">Chill Mix</div>
-              </div>
-            </section>
-
-            <SongList
-              songs={filteredSongs}
-              currentSong={currentSong}
-              onSongClick={handleSongClick}
-              searchQuery={searchQuery}
-              onSearchChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </>
-        )}
-
-        {activePage === "search" && (
-          <>
-            <section className="main-section">
-              <h2>Search</h2>
-              <p className="section-subtitle">
-                Search inside your songs by title or artist.
-              </p>
-            </section>
-
-            <SongList
-              songs={filteredSongs}
-              currentSong={currentSong}
-              onSongClick={handleSongClick}
-              searchQuery={searchQuery}
-              onSearchChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </>
-        )}
-
-        {activePage === "library" && (
-          <section className="main-section">
-            <h2>Your Library</h2>
-            <p className="section-subtitle">
-              In a real app this would show your playlists, albums and liked
-              songs. For now, it&apos;s a placeholder.
-            </p>
-          </section>
-        )}
-      </main>
+      <audio
+        ref={audioRef}
+        onEnded={handleEnded}
+        onLoadedMetadata={handleLoadedMetadata}
+        onTimeUpdate={handleTimeUpdate}
+      />
     </div>
-
-    <Player
-      currentSong={currentSong}
-      isPlaying={isPlaying}
-      onPlayPause={handlePlayPauseClick}
-      onNext={playNext}
-      onPrev={playPrev}
-      currentTime={formatTime(currentTime)}
-      duration={formatTime(duration)}
-      progressPercent={progressPercent}
-      onTimelineClick={handleTimelineClick}
-    />
-
-    <audio
-      ref={audioRef}
-      onEnded={handleEnded}
-      onLoadedMetadata={handleLoadedMetadata}
-      onTimeUpdate={handleTimeUpdate}
-    />
-  </div>
-);
-
+  );
 }
+
 export default App;
