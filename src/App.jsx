@@ -57,7 +57,8 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0); // seconds
   const [duration, setDuration] = useState(0); // seconds
-  const [searchQuery, setSearchQuery] = useState("");
+  const [localSearch, setLocalSearch] = useState("");   // Home / Your Songs
+  const [onlineSearch, setOnlineSearch] = useState(""); // Search the internet
   const [activePage, setActivePage] = useState("home"); // "home" | "search" | "library"
   const [volume, setVolume] = useState(1); // 0.0 - 1.0 (100% by default)
 
@@ -97,8 +98,8 @@ function App() {
 
   // Local filtering (used on Home page)
   const normalizedQuery = useMemo(
-    () => searchQuery.toLowerCase().trim(),
-    [searchQuery]
+  () => localSearch.toLowerCase().trim(),
+  [localSearch]
   );
 
   const filteredSongs = useMemo(() => {
@@ -344,7 +345,7 @@ const handleSeek = (percent) => {
   // 🌍 ONLINE SEARCH using iTunes API
   const handleOnlineSearch = async (e) => {
     e.preventDefault();
-    const q = searchQuery.trim();
+    const q = onlineSearch.trim();
     if (!q) return;
 
     setIsOnlineLoading(true);
@@ -418,8 +419,8 @@ const handleSeek = (percent) => {
                 songs={filteredSongs}
                 currentSong={currentSong}
                 onSongClick={handleSongClick}
-                searchQuery={searchQuery}
-                onSearchChange={(e) => setSearchQuery(e.target.value)}
+                searchQuery={localSearch}
+                onSearchChange={(e) => setLocalSearch(e.target.value)}
               />
             </>
           )}
@@ -431,18 +432,19 @@ const handleSeek = (percent) => {
                 Type a song or artist. Results use public iTunes previews.
               </p>
 
-              <form className="add-song-form" onSubmit={handleOnlineSearch}>
-                <input
-                  type="text"
-                  className="search-input"
-                  placeholder="Search all music (online)"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                <button className="pill-btn" type="submit">
-                  {isOnlineLoading ? "Searching..." : "Search"}
-                </button>
-              </form>
+           <form className="add-song-form" onSubmit={handleOnlineSearch}>
+             <input
+               type="text"
+               className="search-input"
+               placeholder="Search all music (online)"
+               value={onlineSearch}           
+               onChange={(e) => setOnlineSearch(e.target.value)}
+             />
+             <button className="pill-btn" type="submit">
+               {isOnlineLoading ? "Searching..." : "Search"}
+             </button>
+           </form>
+
 
               {onlineError && (
                 <p className="section-subtitle" style={{ color: "#ff7676" }}>
