@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import "./App.css";
 
 import Sidebar from "./components/Sidebar";
@@ -10,7 +10,7 @@ import Player from "./components/Player";
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
-// Song data (local fallback)
+// Local fallback songs
 const SONGS = [
   {
     id: 1,
@@ -79,12 +79,13 @@ function App() {
     const loadSongs = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/songs`);
+        if (!res.ok) throw new Error("Failed to fetch songs");
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
           setSongs(data);
         }
       } catch (err) {
-        console.log("Backend not running, using local SONGS.", err);
+        console.log("Backend not running or fetch failed, using local SONGS.", err);
       }
     };
 
@@ -92,15 +93,29 @@ function App() {
   }, []);
 
   // Local filtering (used on Home page)
-  const normalizedQuery = searchQuery.toLowerCase().trim();
-  const filteredSongs =
-    normalizedQuery === ""
-      ? songs
-      : songs.filter(
-          (song) =>
-            song.title.toLowerCase().includes(normalizedQuery) ||
-            song.artist.toLowerCase().includes(normalizedQuery)
-        );
+  const normalizedQuery = useMemo(
+    () => searchQuery.toLowerCase().trim(),
+    [searchQuery]
+  );
+
+  const filteredSongs = useMemo(() => {
+    if (normalizedQuery === "") return songs;
+    return songs.filter(
+      (song) =>
+        song.title.toLowerCase().includes(normalizedQuery) ||
+        song.artist.toLowerCase().includes(normalizedQuery)
+    );
+  }, [songs, normalizedQuery]);
+
+  const getActiveList = () => {
+    if (activePage === "search" && onlineResults.length > 0) {
+      return onlineResults;
+    }
+    if (filteredSongs.length > 0) {
+      return filteredSongs;
+    }
+    return songs;
+  };
 
   // Click on song from any list (local or online)
   const handleSongClick = (song) => {
@@ -119,10 +134,8 @@ function App() {
   // Play / Pause button in player
   const handlePlayPauseClick = () => {
     if (!currentSong) {
-      const firstSong =
-        activePage === "search"
-          ? onlineResults[0] || songs[0]
-          : filteredSongs[0] || songs[0];
+      const list = getActiveList();
+      const firstSong = list[0];
       if (!firstSong) return;
       setCurrentSong(firstSong);
       setIsPlaying(true);
@@ -133,12 +146,7 @@ function App() {
 
   // ▶▶ Next song
   const playNext = () => {
-    const list =
-      activePage === "search" && onlineResults.length > 0
-        ? onlineResults
-        : filteredSongs.length > 0
-        ? filteredSongs
-        : songs;
+    const list = getActiveList();
 
     if (!currentSong) {
       if (list.length === 0) return;
@@ -150,18 +158,14 @@ function App() {
     const currentIndex = list.findIndex((s) => s.id === currentSong.id);
     const nextIndex =
       currentIndex === -1 ? 0 : (currentIndex + 1) % list.length;
+
     setCurrentSong(list[nextIndex]);
     setIsPlaying(true);
   };
 
   // ◀◀ Previous song
   const playPrev = () => {
-    const list =
-      activePage === "search" && onlineResults.length > 0
-        ? onlineResults
-        : filteredSongs.length > 0
-        ? filteredSongs
-        : songs;
+    const list = getActiveList();
 
     if (!currentSong) {
       if (list.length === 0) return;
@@ -175,6 +179,7 @@ function App() {
       currentIndex === -1
         ? list.length - 1
         : (currentIndex - 1 + list.length) % list.length;
+
     setCurrentSong(list[prevIndex]);
     setIsPlaying(true);
   };
@@ -269,9 +274,11 @@ function App() {
     }
   };
 
-    const handleDeleteSong = async (id) => {
-    // Optional: confirm before deleting
-    const confirmDelete = window.confirm("Delete this song from your library?");
+  // 🗑 Delete-song handler (DELETE /api/songs/:id)
+  const handleDeleteSong = async (id) => {
+    const confirmDelete = window.confirm(
+      "Delete this song from your library?"
+    );
     if (!confirmDelete) return;
 
     try {
@@ -280,20 +287,21 @@ function App() {
       });
 
       if (!res.ok) {
-        throw new Error("Failed to delete song");
+        const text = await res.text();
+        console.error("Delete failed:", res.status, text);
+        alert("Error deleting song (status " + res.status + ")");
+        return;
       }
 
-      // Remove from local state
       setSongs((prev) => prev.filter((song) => song.id !== id));
 
-      // If the deleted song is currently playing, stop it
       if (currentSong?.id === id) {
         setCurrentSong(null);
         setIsPlaying(false);
       }
     } catch (err) {
-      console.error(err);
-      alert("Error deleting song");
+      console.error("Delete request error:", err);
+      alert("Error deleting song (network error)");
     }
   };
 
@@ -311,21 +319,22 @@ function App() {
           q
         )}&media=music&limit=25`
       );
+      if (!res.ok) throw new Error("Search request failed");
       const data = await res.json();
 
-const mapped = (data.results || [])
-  .filter((item) => item.previewUrl)
-  .map((item, idx) => ({
-    id: item.trackId || idx,
-    title: item.trackName,
-    artist: item.artistName,
-    duration: item.trackTimeMillis
-      ? formatTime(item.trackTimeMillis / 1000)
-      : "0:30",
-    src: item.previewUrl, // audio URL
-    imageUrl: item.artworkUrl100, // cover image
-  }));
-
+      const mapped =
+        (data.results || [])
+          .filter((item) => item.previewUrl)
+          .map((item, idx) => ({
+            id: item.trackId || idx,
+            title: item.trackName,
+            artist: item.artistName,
+            duration: item.trackTimeMillis
+              ? formatTime(item.trackTimeMillis / 1000)
+              : "0:30",
+            src: item.previewUrl,
+            imageUrl: item.artworkUrl100,
+          })) || [];
 
       setOnlineResults(mapped);
     } catch (err) {
@@ -336,8 +345,10 @@ const mapped = (data.results || [])
     }
   };
 
-  const progressPercent =
-    duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const progressPercent = useMemo(
+    () => (duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0),
+    [currentTime, duration]
+  );
 
   return (
     <div className="app">
@@ -416,30 +427,29 @@ const mapped = (data.results || [])
                 )}
 
                 {!isOnlineLoading &&
-  onlineResults.map((song, index) => (
-    <div
-      key={song.id}
-      className={`song-row ${
-        currentSong?.id === song.id ? "active" : ""
-      }`}
-      onClick={() => handleSongClick(song)}
-    >
-      <span>{index + 1}</span>
-      <span className="song-with-cover">
-        {song.imageUrl && (
-          <img
-            src={song.imageUrl}
-            alt={song.title}
-            className="song-cover"
-          />
-        )}
-        <span>{song.title}</span>
-      </span>
-      <span>{song.artist}</span>
-      <span>{song.duration}</span>
-    </div>
-  ))}
-
+                  onlineResults.map((song, index) => (
+                    <div
+                      key={song.id}
+                      className={`song-row ${
+                        currentSong?.id === song.id ? "active" : ""
+                      }`}
+                      onClick={() => handleSongClick(song)}
+                    >
+                      <span>{index + 1}</span>
+                      <span className="song-with-cover">
+                        {song.imageUrl && (
+                          <img
+                            src={song.imageUrl}
+                            alt={song.title}
+                            className="song-cover"
+                          />
+                        )}
+                        <span>{song.title}</span>
+                      </span>
+                      <span>{song.artist}</span>
+                      <span>{song.duration}</span>
+                    </div>
+                  ))}
               </div>
             </section>
           )}
@@ -493,25 +503,24 @@ const mapped = (data.results || [])
               </form>
 
               <div style={{ marginTop: "1rem" }}>
-  <h3>All Songs (from backend)</h3>
-  <ul className="library-list">
-    {songs.map((song) => (
-      <li key={song.id} className="library-item">
-        <span>
-          {song.title} — {song.artist}
-        </span>
-        <button
-          type="button"
-          className="delete-btn"
-          onClick={() => handleDeleteSong(song.id)}
-        >
-          ✕
-        </button>
-      </li>
-    ))}
-  </ul>
-</div>
-
+                <h3>All Songs (from backend)</h3>
+                <ul className="library-list">
+                  {songs.map((song) => (
+                    <li key={song.id} className="library-item">
+                      <span>
+                        {song.title} — {song.artist}
+                      </span>
+                      <button
+                        type="button"
+                        className="delete-btn"
+                        onClick={() => handleDeleteSong(song.id)}
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </section>
           )}
         </main>
