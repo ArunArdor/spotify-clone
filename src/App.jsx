@@ -269,6 +269,34 @@ function App() {
     }
   };
 
+    const handleDeleteSong = async (id) => {
+    // Optional: confirm before deleting
+    const confirmDelete = window.confirm("Delete this song from your library?");
+    if (!confirmDelete) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/songs/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete song");
+      }
+
+      // Remove from local state
+      setSongs((prev) => prev.filter((song) => song.id !== id));
+
+      // If the deleted song is currently playing, stop it
+      if (currentSong?.id === id) {
+        setCurrentSong(null);
+        setIsPlaying(false);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting song");
+    }
+  };
+
   // 🌍 ONLINE SEARCH using iTunes API
   const handleOnlineSearch = async (e) => {
     e.preventDefault();
@@ -465,15 +493,25 @@ const mapped = (data.results || [])
               </form>
 
               <div style={{ marginTop: "1rem" }}>
-                <h3>All Songs (from backend)</h3>
-                <ul>
-                  {songs.map((song) => (
-                    <li key={song.id}>
-                      {song.title} — {song.artist}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+  <h3>All Songs (from backend)</h3>
+  <ul className="library-list">
+    {songs.map((song) => (
+      <li key={song.id} className="library-item">
+        <span>
+          {song.title} — {song.artist}
+        </span>
+        <button
+          type="button"
+          className="delete-btn"
+          onClick={() => handleDeleteSong(song.id)}
+        >
+          ✕
+        </button>
+      </li>
+    ))}
+  </ul>
+</div>
+
             </section>
           )}
         </main>
