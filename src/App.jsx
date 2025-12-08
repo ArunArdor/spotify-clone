@@ -185,17 +185,37 @@ function App() {
     setIsPlaying(true);
   };
 
-  // Sync React state with <audio>
+    // When the current song changes, load its source and (optionally) start from 0
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     if (!currentSong) {
       audio.pause();
+      setCurrentTime(0);
+      setDuration(0);
       return;
     }
 
+    // set src only when song changes
     audio.src = currentSong.src;
+
+    // start this new song from the beginning
+    audio.currentTime = 0;
+    setCurrentTime(0);
+
+    // if we are supposed to be playing, start
+    if (isPlaying) {
+      audio
+        .play()
+        .catch((err) => console.log("Autoplay blocked or error:", err));
+    }
+  }, [currentSong]); // 👈 only runs when currentSong changes
+
+  // When play/pause changes, just control playback (don't touch src or time)
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !currentSong) return;
 
     if (isPlaying) {
       audio
@@ -204,7 +224,7 @@ function App() {
     } else {
       audio.pause();
     }
-  }, [currentSong, isPlaying]);
+  }, [isPlaying]); // 👈 only runs when play/pause toggles
 
     // Volume effect – keep audio element in sync with volume state
   useEffect(() => {
