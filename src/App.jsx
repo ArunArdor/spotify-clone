@@ -6,6 +6,10 @@ import Header from "./components/Header";
 import SongList from "./components/SongList";
 import Player from "./components/Player";
 
+// 🌐 Backend base URL: env in production, localhost in dev
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+
 // Song data (local fallback)
 const SONGS = [
   {
@@ -74,7 +78,7 @@ function App() {
   useEffect(() => {
     const loadSongs = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/songs");
+        const res = await fetch(`${API_BASE}/api/songs`);
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
           setSongs(data);
@@ -238,7 +242,7 @@ function App() {
     }
 
     try {
-      const res = await fetch("http://localhost:5000/api/songs", {
+      const res = await fetch(`${API_BASE}/api/songs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newSong),
@@ -281,17 +285,19 @@ function App() {
       );
       const data = await res.json();
 
-      const mapped = (data.results || [])
-        .filter((item) => item.previewUrl)
-        .map((item, idx) => ({
-          id: item.trackId || idx,
-          title: item.trackName,
-          artist: item.artistName,
-          duration: item.trackTimeMillis
-            ? formatTime(item.trackTimeMillis / 1000)
-            : "0:30",
-          src: item.previewUrl, // internet audio URL
-        }));
+const mapped = (data.results || [])
+  .filter((item) => item.previewUrl)
+  .map((item, idx) => ({
+    id: item.trackId || idx,
+    title: item.trackName,
+    artist: item.artistName,
+    duration: item.trackTimeMillis
+      ? formatTime(item.trackTimeMillis / 1000)
+      : "0:30",
+    src: item.previewUrl, // audio URL
+    imageUrl: item.artworkUrl100, // cover image
+  }));
+
 
       setOnlineResults(mapped);
     } catch (err) {
@@ -382,20 +388,30 @@ function App() {
                 )}
 
                 {!isOnlineLoading &&
-                  onlineResults.map((song, index) => (
-                    <div
-                      key={song.id}
-                      className={`song-row ${
-                        currentSong?.id === song.id ? "active" : ""
-                      }`}
-                      onClick={() => handleSongClick(song)}
-                    >
-                      <span>{index + 1}</span>
-                      <span>{song.title}</span>
-                      <span>{song.artist}</span>
-                      <span>{song.duration}</span>
-                    </div>
-                  ))}
+  onlineResults.map((song, index) => (
+    <div
+      key={song.id}
+      className={`song-row ${
+        currentSong?.id === song.id ? "active" : ""
+      }`}
+      onClick={() => handleSongClick(song)}
+    >
+      <span>{index + 1}</span>
+      <span className="song-with-cover">
+        {song.imageUrl && (
+          <img
+            src={song.imageUrl}
+            alt={song.title}
+            className="song-cover"
+          />
+        )}
+        <span>{song.title}</span>
+      </span>
+      <span>{song.artist}</span>
+      <span>{song.duration}</span>
+    </div>
+  ))}
+
               </div>
             </section>
           )}
