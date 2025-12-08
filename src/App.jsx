@@ -7,8 +7,9 @@ import SongList from "./components/SongList";
 import Player from "./components/Player";
 
 // 🌐 Backend base URL: env in production, localhost in dev
-const API_BASE =
+const rawBase =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+  const API_BASE = rawBase.replace(/\/+$/, "");                 // remove any trailing /
 
 // Local fallback songs
 const SONGS = [
