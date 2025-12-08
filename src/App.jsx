@@ -287,12 +287,24 @@ function App() {
       });
 
       if (!res.ok) {
+        // If backend says "not found", just treat as already deleted
+        if (res.status === 404) {
+          console.warn("Song not found on backend, removing locally");
+          setSongs((prev) => prev.filter((song) => song.id !== id));
+          if (currentSong?.id === id) {
+            setCurrentSong(null);
+            setIsPlaying(false);
+          }
+          return;
+        }
+
         const text = await res.text();
         console.error("Delete failed:", res.status, text);
         alert("Error deleting song (status " + res.status + ")");
         return;
       }
 
+      // Success case
       setSongs((prev) => prev.filter((song) => song.id !== id));
 
       if (currentSong?.id === id) {
