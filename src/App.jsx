@@ -336,9 +336,7 @@ function App() {
     setOnlineError("");
     try {
       const res = await fetch(
-        `https://itunes.apple.com/search?term=${encodeURIComponent(
-          q
-        )}&media=music&limit=25`
+        `${API_BASE}/api/search?term=${encodeURIComponent(q)}`
       );
       if (!res.ok) throw new Error("Search request failed");
       const data = await res.json();
