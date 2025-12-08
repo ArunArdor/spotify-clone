@@ -350,3 +350,9 @@ body {
   cursor: pointer;
   accent-color: #1db954; /* Spotify green on supported browsers */
 }
+
+.timeline-slider {
+  width: 100%;
+  cursor: pointer;
+  accent-color: #1db954; /* Spotify green on supported browsers */
+}

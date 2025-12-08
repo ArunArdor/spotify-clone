@@ -6,16 +6,22 @@ export default function Player({
   onPlayPause,
   onNext,
   onPrev,
-  currentTime,
-  duration,
-  progressPercent,
-  onTimelineClick,
+  currentTime,      // formatted (e.g. "0:32")
+  duration,         // formatted, not used in UI but kept for future
+  remainingTime,    // formatted, e.g. "-2:24"
+  progressPercent,  // 0–100
+  onSeek,           // function(percent)
   volume,
   onVolumeChange,
 }) {
   const handleVolumeInput = (e) => {
     const value = Number(e.target.value); // 0–100
-    onVolumeChange(value / 100); // convert to 0–1
+    onVolumeChange(value / 100);          // convert to 0–1
+  };
+
+  const handleTimelineInput = (e) => {
+    const value = Number(e.target.value); // 0–100
+    onSeek(value);
   };
 
   return (
@@ -47,14 +53,21 @@ export default function Player({
         </div>
 
         <div className="player-timeline">
+          {/* left: elapsed time */}
           <span className="time">{currentTime}</span>
-          <div className="timeline-bar" onClick={onTimelineClick}>
-            <div
-              className="timeline-progress"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-          <span className="time">{duration}</span>
+
+          {/* middle: draggable slider */}
+          <input
+            type="range"
+            className="timeline-slider"
+            min="0"
+            max="100"
+            value={progressPercent}
+            onChange={handleTimelineInput}
+          />
+
+          {/* right: remaining time (counts down) */}
+          <span className="time">{remainingTime}</span>
         </div>
       </div>
 

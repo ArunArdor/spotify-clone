@@ -233,18 +233,13 @@ function App() {
     setCurrentTime(audio.currentTime || 0);
   };
 
-  // Click on the progress bar to seek
-  const handleTimelineClick = (event) => {
-    if (!duration || !audioRef.current) return;
-
-    const rect = event.currentTarget.getBoundingClientRect();
-    const clickX = event.clientX - rect.left;
-    const ratio = clickX / rect.width;
-    const newTime = ratio * duration;
-
-    audioRef.current.currentTime = newTime;
-    setCurrentTime(newTime);
-  };
+// Seek when user drags the timeline slider (percent: 0–100)
+const handleSeek = (percent) => {
+  if (!duration || !audioRef.current) return;
+  const newTime = (percent / 100) * duration;
+  audioRef.current.currentTime = newTime;
+  setCurrentTime(newTime);
+};
 
   // ✅ Add-song handler (uses your backend POST /api/songs)
   const handleAddSong = async (e) => {
@@ -368,6 +363,8 @@ function App() {
     () => (duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0),
     [currentTime, duration]
   );
+
+  const remainingSeconds = Math.max(0, duration - currentTime);
 
   return (
     <div className="app">
@@ -551,13 +548,15 @@ function App() {
         onPlayPause={handlePlayPauseClick}
         onNext={playNext}
         onPrev={playPrev}
-        currentTime={formatTime(currentTime)}
-        duration={formatTime(duration)}
+        currentTime={formatTime(currentTime)}                 // left timer
+        duration={formatTime(duration)}                       // (optional, not shown now)
+        remainingTime={`-${formatTime(remainingSeconds)}`}    // right timer, counts down
         progressPercent={progressPercent}
-        onTimelineClick={handleTimelineClick}
+        onSeek={handleSeek}
         volume={volume}
         onVolumeChange={(newVolume) => setVolume(newVolume)}
       />
+
 
       <audio
         ref={audioRef}
