@@ -58,6 +58,8 @@ function App() {
   const [duration, setDuration] = useState(0); // seconds
   const [searchQuery, setSearchQuery] = useState("");
   const [activePage, setActivePage] = useState("home"); // "home" | "search" | "library"
+  const [volume, setVolume] = useState(1); // 0.0 - 1.0 (100% by default)
+
 
   // form state for adding custom songs (backend)
   const [newSong, setNewSong] = useState({
@@ -204,6 +206,13 @@ function App() {
       audio.pause();
     }
   }, [currentSong, isPlaying]);
+
+    // Volume effect – keep audio element in sync with volume state
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = volume; // 0.0 - 1.0
+  }, [volume]);
 
   // When song finishes, auto-next
   const handleEnded = () => {
@@ -548,6 +557,8 @@ function App() {
         duration={formatTime(duration)}
         progressPercent={progressPercent}
         onTimelineClick={handleTimelineClick}
+        volume={volume}
+        onVolumeChange={(newVolume) => setVolume(newVolume)}
       />
 
       <audio

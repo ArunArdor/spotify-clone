@@ -1,3 +1,5 @@
+// src/components/Player.jsx
+/* eslint-disable react/prop-types */
 export default function Player({
   currentSong,
   isPlaying,
@@ -8,9 +10,17 @@ export default function Player({
   duration,
   progressPercent,
   onTimelineClick,
+  volume,
+  onVolumeChange,
 }) {
+  const handleVolumeInput = (e) => {
+    const value = Number(e.target.value); // 0–100
+    onVolumeChange(value / 100); // convert to 0–1
+  };
+
   return (
     <footer className="player-bar">
+      {/* Left: current track info */}
       <div className="player-left">
         <div className="track-title">
           {currentSong ? currentSong.title : "No song playing"}
@@ -18,10 +28,11 @@ export default function Player({
         <div className="track-artist">
           {currentSong
             ? currentSong.artist
-            : "Pick a song from the list above"}
+            : "Pick a song from the list above or search"}
         </div>
       </div>
 
+      {/* Center: controls + timeline */}
       <div className="player-center">
         <div className="player-controls">
           <button className="icon-btn" onClick={onPrev}>
@@ -34,6 +45,7 @@ export default function Player({
             ⏭
           </button>
         </div>
+
         <div className="player-timeline">
           <span className="time">{currentTime}</span>
           <div className="timeline-bar" onClick={onTimelineClick}>
@@ -46,11 +58,17 @@ export default function Player({
         </div>
       </div>
 
+      {/* Right: volume */}
       <div className="player-right">
         <span className="volume-icon">🔊</span>
-        <div className="volume-bar">
-          <div className="volume-level" />
-        </div>
+        <input
+          type="range"
+          className="volume-slider"
+          min="0"
+          max="100"
+          value={Math.round(volume * 100)}
+          onChange={handleVolumeInput}
+        />
       </div>
     </footer>
   );
