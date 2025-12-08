@@ -120,18 +120,17 @@ function App() {
   };
 
   // Click on song from any list (local or online)
-  const handleSongClick = (song) => {
-    if (currentSong?.id === song.id) {
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play();
-      }
-      setIsPlaying(true);
-    } else {
-      setCurrentSong(song);
-      setIsPlaying(true);
-    }
-  };
+  const handleSongClick = (song) => {                     // If we clicked the same song → just toggle play/pause, don't reset
+  if (currentSong?.id === song.id) {
+    setIsPlaying((prev) => !prev);
+    return;
+  }
+
+  // If it's a new song → start that song from the beginning
+  setCurrentSong(song);
+  setIsPlaying(true);
+};
+
 
   // Play / Pause button in player
   const handlePlayPauseClick = () => {
